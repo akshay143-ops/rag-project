@@ -34,6 +34,32 @@ The FastAPI app currently includes:
 - Which embedding model or vector database will be used later?
 - How should user questions and retrieved context be validated before sending them to Gemini?
 
+## Week 5 Gemini Test Endpoint
+
+This week adds a simple Gemini API test endpoint without adding RAG logic yet.
+
+### What `/test-gemini` Does
+
+The `/test-gemini` endpoint sends a hardcoded prompt to Gemini:
+
+`Explain what a large language model is in one paragraph.`
+
+It returns the prompt and Gemini-generated response as JSON. The endpoint does not accept user input, upload documents, chunk text, create embeddings, or retrieve context.
+
+### Where the Gemini Call Lives
+
+The Gemini API call lives inside the `test_gemini()` function in `rag_app.py`. That function creates a `gemini-1.5-flash` model with the `google-generativeai` SDK and calls `generate_content()`.
+
+### What I Learned
+
+The Gemini Python documentation shows that the backend should create a model object, call `generate_content()` with a prompt, and read the generated text from the response. Keeping this logic in the backend protects the API key and gives the server control over prompts, costs, and error handling.
+
+### Questions and Uncertainties
+
+- Which Gemini model should be used long term for this project?
+- How should errors from Gemini be logged without exposing sensitive information?
+- What limits should be added later to control usage and cost?
+
 
 ## Git Commands Used So Far
 

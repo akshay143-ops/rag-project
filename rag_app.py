@@ -2,7 +2,7 @@ import os
 
 import google.generativeai as genai
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 
 load_dotenv()
@@ -32,3 +32,25 @@ def gemini_status() -> dict[str, str]:
         "status": "configured",
         "message": "Gemini API key loaded. Gemini calls are not implemented yet.",
     }
+
+
+@app.get("/test-gemini")
+def test_gemini() -> dict[str, str]:
+    prompt = "Explain what a large language model is in one paragraph."
+
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(prompt)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Gemini request failed. Check your API key and try again.",
+        ) from exc
+
+    if not response.text:
+        raise HTTPException(
+            status_code=502,
+            detail="Gemini returned an empty response.",
+        )
+
+    return {"prompt": prompt, "response": response.text}
