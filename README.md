@@ -60,6 +60,26 @@ The Gemini Python documentation shows that the backend should create a model obj
 - How should errors from Gemini be logged without exposing sensitive information?
 - What limits should be added later to control usage and cost?
 
+## Week 6 Multi-Step Gemini Flow
+
+This week updates `/test-gemini` so it uses a simple multi-step AI flow instead of a single prompt.
+
+### Flow Description
+
+Step 1 asks Gemini to create a short three-bullet outline explaining what a large language model is. The app stores that outline as an intermediate value inside `test_gemini()`.
+
+Step 2 builds a second prompt using the outline from Step 1. Gemini then expands the outline into one clear paragraph, and the endpoint returns only this final response to the client.
+
+### Why the Steps Are Separated
+
+The outline step gives the model a simple planning task before writing the final answer. The expansion step depends on that outline, which makes the final response easier to control and shows how later AI calls can reuse earlier outputs.
+
+### Challenges and Open Questions
+
+- The endpoint still requires a real Gemini API key in `.env`; the placeholder value will cause the Gemini request to fail safely.
+- Later versions may need logging for intermediate outputs, but logs should avoid secrets and sensitive data.
+- It is still unclear how much intermediate reasoning should be returned to users in future RAG endpoints.
+
 
 ## Git Commands Used So Far
 

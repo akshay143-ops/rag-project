@@ -36,21 +36,34 @@ def gemini_status() -> dict[str, str]:
 
 @app.get("/test-gemini")
 def test_gemini() -> dict[str, str]:
-    prompt = "Explain what a large language model is in one paragraph."
+    outline_prompt = (
+        "Create a short three-bullet outline explaining what a large language "
+        "model is."
+    )
 
     try:
         model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content(prompt)
+        outline_response = model.generate_content(outline_prompt)
+
+        if not outline_response.text:
+            raise ValueError("Gemini returned an empty outline.")
+
+        outline = outline_response.text.strip()
+        final_prompt = (
+            "Use this outline to explain what a large language model is in one "
+            f"clear paragraph:\n\n{outline}"
+        )
+        final_response = model.generate_content(final_prompt)
     except Exception as exc:
         raise HTTPException(
             status_code=502,
             detail="Gemini request failed. Check your API key and try again.",
         ) from exc
 
-    if not response.text:
+    if not final_response.text:
         raise HTTPException(
             status_code=502,
             detail="Gemini returned an empty response.",
         )
 
-    return {"prompt": prompt, "response": response.text}
+    return {"response": final_response.text}
