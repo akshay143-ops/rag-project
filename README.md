@@ -80,6 +80,28 @@ The outline step gives the model a simple planning task before writing the final
 - Later versions may need logging for intermediate outputs, but logs should avoid secrets and sensitive data.
 - It is still unclear how much intermediate reasoning should be returned to users in future RAG endpoints.
 
+## Week 7 Input and Output Validation
+
+This week adds a new `POST /query` endpoint that accepts a user question, validates it, sends it to Gemini, reviews the answer with a second Gemini call, and returns the final answer.
+
+### Why Input Validation Exists
+
+Input validation prevents empty, too-short, or overly long questions from being sent to the AI model. This keeps bad requests from wasting model calls and gives users clear error messages before any AI work happens.
+
+### Why Output Validation Exists
+
+Output validation checks whether the AI returned an empty or obviously too-short response. This prevents the API from returning unusable answers and makes failures easier to understand.
+
+### Why a Second Model Reviews Responses
+
+The first model call answers the user's question. The second model call reviews that answer and improves it if it is unclear, incomplete, or poorly written. This mirrors a common production pattern where one AI step generates content and another AI step validates or refines it before the user sees it.
+
+### Questions and Uncertainties
+
+- How strict should validation rules become as the app supports real user questions?
+- Should reviewed answers include any indication that they were revised by a second model call?
+- What logging is useful for debugging while still avoiding sensitive data?
+
 
 ## Git Commands Used So Far
 
