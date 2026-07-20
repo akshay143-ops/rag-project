@@ -20,7 +20,7 @@ from config import GEMINI_API_KEY, GEMINI_MODEL
 _client = genai.Client(api_key=GEMINI_API_KEY)
 
 
-def check_hallucination(answer, context_docs):
+def check_hallucination(answer, context_docs, question=""):
     """
     Ask Gemini to evaluate whether the generated answer is grounded in
     the source documents that were retrieved.
@@ -28,6 +28,7 @@ def check_hallucination(answer, context_docs):
     Args:
         answer:       The answer our app generated.
         context_docs: The documents we retrieved and used as context.
+        question:     The user's original question.
 
     Returns:
         A dictionary with:
@@ -69,7 +70,54 @@ def check_hallucination(answer, context_docs):
     #   6. Return the dict. Wrap everything in try/except — if this call fails,
     #      return: {"verdict": "UNKNOWN", "is_grounded": True, "warning": ""}
     #
-    return {"verdict": "UNKNOWN", "is_grounded": True, "warning": ""}  # placeholder
+    try:
+        context = "\n\n".join(
+            [f"Document {i+1}: {doc}" for i, doc in enumerate(context_docs)]
+        )
+
+        prompt = f"""You are evaluating whether an AI answer is supported by the provided source documents.
+
+Source Documents:
+{context}
+
+User Question:
+{question}
+
+Generated Answer:
+{answer}
+
+Classify the answer using exactly one of these labels:
+- GROUNDED: The answer is fully supported by the source documents.
+- PARTIAL: The answer is partly supported, but includes some information not clearly stated in the source documents.
+- HALLUCINATED: The answer is not supported by the source documents.
+
+Respond with exactly one word: GROUNDED, PARTIAL, or HALLUCINATED."""
+
+        response = _client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.0),
+        )
+        verdict = response.text.strip().upper()
+
+        valid_verdicts = {"GROUNDED", "PARTIAL", "HALLUCINATED"}
+        if verdict not in valid_verdicts:
+            verdict = "PARTIAL"
+
+        if verdict == "GROUNDED":
+            warning = ""
+        elif verdict == "PARTIAL":
+            warning = "Note: This answer may include some information beyond the provided sources."
+        else:
+            warning = "Warning: This answer may contain information not found in the source documents."
+
+        return {
+            "verdict": verdict,
+            "is_grounded": verdict == "GROUNDED",
+            "warning": warning,
+        }
+    except Exception:
+        return {"verdict": "UNKNOWN", "is_grounded": True, "warning": ""}
 
 
 def calculate_confidence(distances):
@@ -103,4 +151,9 @@ def calculate_confidence(distances):
     #   3. Apply the formula above
     #   4. Return the result rounded to 2 decimal places: round(confidence, 2)
     #
-    return 0.0  # placeholder — replace with your implementation
+    if not distances:
+        return 0.0
+
+    avg_distance = sum(distances) / len(distances)
+    confidence = max(0.0, 1.0 - (avg_distance / 2.0))
+    return round(confidence, 2)
