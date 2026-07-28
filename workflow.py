@@ -61,7 +61,36 @@ def rewrite_query(original_query, conversation_context=""):
     #   4. Return response.text.strip() if it's not empty and under 500 chars
     #   5. Wrap in try/except — if anything fails, return original_query unchanged
     #
-    return original_query  # placeholder — query passes through unchanged
+    try:
+        history_section = ""
+        if conversation_context:
+            history_section = f"\nRecent conversation:\n{conversation_context}\n"
+
+        prompt = f"""Rewrite the user's question into a clear, specific search query for a RAG system.
+
+{history_section}
+Original question:
+{original_query}
+
+Rules:
+- Resolve pronouns like "it", "that", or "this" using the recent conversation.
+- Keep the rewritten query focused on the user's intent.
+- Make it suitable for semantic search over documents about Python, machine learning, databases, APIs, cloud, and AI concepts.
+- Respond with only the rewritten query."""
+
+        response = _client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.1),
+        )
+        rewritten = response.text.strip().strip('"')
+
+        if rewritten and len(rewritten) <= 500:
+            return rewritten
+    except Exception:
+        pass
+
+    return original_query
 
 
 def decompose_query(query):
@@ -92,7 +121,36 @@ def decompose_query(query):
     #   4. Return at most 3 sub-questions
     #   5. Wrap in try/except — if anything fails, return [query]
     #
-    return [query]  # placeholder — query is not decomposed
+    try:
+        prompt = f"""If this question has multiple parts, split it into 2-3 simpler search questions.
+If it is already simple, return the original question as one line.
+
+Question:
+{query}
+
+Rules:
+- Return one question per line.
+- Do not number the questions.
+- Do not include explanations.
+- Return at most 3 questions."""
+
+        response = _client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.1),
+        )
+
+        sub_questions = []
+        for line in response.text.splitlines():
+            cleaned = line.strip().lstrip("-").strip()
+            if ". " in cleaned[:4]:
+                cleaned = cleaned.split(". ", 1)[1].strip()
+            if len(cleaned) >= 5:
+                sub_questions.append(cleaned)
+
+        return sub_questions[:3] if sub_questions else [query]
+    except Exception:
+        return [query]
 
 
 def multi_hop_retrieve(query, n_per_hop=2):

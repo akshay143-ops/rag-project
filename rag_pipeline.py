@@ -159,6 +159,18 @@ def run_rag(query, conversation_history=None):
     #         "confidence": 0.0, "grounding": {}, "error": error_message}
     #   3. Clean up the query: query = sanitize_input(query)
     # ─────────────────────────────────────────────────────────────────────────
+    is_valid, error_message = validate_input(query)
+    if not is_valid:
+        return {
+            "answer": error_message,
+            "sources": [],
+            "distances": [],
+            "confidence": 0.0,
+            "grounding": {},
+            "error": error_message,
+        }
+
+    query = sanitize_input(query)
 
     # ── Week 15 TODO ──────────────────────────────────────────────────────────
     # Rewrite the query before retrieval to improve embedding quality.
@@ -174,9 +186,14 @@ def run_rag(query, conversation_history=None):
     #            history_context = conversation_history.get_formatted_history()
     #   2. Rewrite: query = rewrite_query(query, history_context)
     # ─────────────────────────────────────────────────────────────────────────
+    history_context = ""
+    if conversation_history and len(conversation_history) > 0:
+        history_context = conversation_history.get_formatted_history()
+
+    retrieval_query = rewrite_query(query, history_context)
 
     # ── Week 10: Core Retrieval — already complete ───────────────────────────
-    documents, distances = retrieve_context(query)
+    documents, distances = retrieve_context(retrieval_query)
 
     # ── Week 14 TODO ──────────────────────────────────────────────────────────
     # Filter out documents that aren't similar enough to be useful.
