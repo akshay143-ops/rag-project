@@ -99,6 +99,37 @@ The app opens in your browser at `http://localhost:8501`.
 | `monitoring.py` | Hallucination detection (Week 13) |
 | `filters.py` | Similarity filtering and fallbacks (Week 14) |
 | `workflow.py` | Query rewriting and multi-hop retrieval (Week 15) |
+| `compliance.py` | Metadata tagging and sensitive data redaction (Week 18) |
+
+---
+
+## Compliance and Sensitive Data Handling
+
+This project is a learning app, but it models compliance-aware patterns used in commercial AI systems. The most relevant trust principles are:
+
+- **Security:** user input is validated before retrieval or model calls, and secrets such as `.env` are excluded from Git.
+- **Confidentiality:** potentially sensitive values are tagged and redacted before they are displayed, stored in session history, or sent to the model.
+- **Privacy:** personal identifiers such as emails, phone numbers, SSNs, and credit-card-like values are treated as sensitive and masked.
+
+Sensitive data could appear in user questions, model responses, future uploaded/internal documents, retrieved context, error messages, and any debug or analytics output. The current sample documents are public learning content, but document metadata is still generated so downstream controls can use the same structure for public and sensitive sources.
+
+The metadata tagging scheme is:
+
+- `sensitivity`: `public`, `confidential`, or `restricted`
+- `data_type`: `operational`, `email`, `phone`, `ssn`, or `credit_card`
+- `source`: `user_input`, `document`, or `model_output`
+- `contains_sensitive_data`: `true` or `false`
+
+Redaction occurs in `compliance.py` and is applied at key boundaries:
+
+- User input is redacted before display in the Streamlit chat.
+- User input is redacted before query rewriting, retrieval, and model prompts.
+- Source documents are tagged during ingestion and stored with ChromaDB metadata.
+- Retrieved metadata is carried through the pipeline with the response.
+- Model output and API error messages are redacted before being returned to the UI.
+- Conversation history stores redacted user and assistant messages.
+
+This approach is intentionally simple. It uses regex-based detection, so it will not catch every form of sensitive data and may occasionally redact harmless text. It is not a certification of compliance, but it demonstrates safe defaults that reduce exposure risk and support audit-friendly metadata.
 
 ---
 

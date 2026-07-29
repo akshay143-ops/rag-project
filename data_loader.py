@@ -9,6 +9,8 @@
 # We've chosen short paragraphs on CS and AI topics so the content is
 # relevant and interesting for students learning about these technologies.
 
+from compliance import build_metadata
+
 
 # A list of short paragraphs covering various tech topics.
 # These are the "documents" that will be stored in our vector database.
@@ -128,3 +130,16 @@ def generate_ids(documents):
         A list of ID strings like ["doc_0", "doc_1", ...].
     """
     return [f"doc_{i}" for i in range(len(documents))]
+
+
+def generate_metadata(documents):
+    """
+    Generate compliance metadata for each source document.
+
+    The starter documents are public learning content, but we still tag them so
+    downstream retrieval and auditing code can treat sensitivity consistently.
+    """
+    return [
+        build_metadata(document, source="document", default_sensitivity="public")
+        for document in documents
+    ]

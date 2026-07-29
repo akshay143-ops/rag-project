@@ -15,6 +15,7 @@
 import streamlit as st
 from rag_pipeline import initialize_vector_store, run_rag, get_feature_status
 from conversation import ConversationHistory
+from compliance import build_metadata, redact_sensitive_text
 
 # --- Page Configuration ---
 # This must be the FIRST Streamlit command called in the script.
@@ -138,12 +139,19 @@ for message in st.session_state.chat_messages:
 query = st.chat_input("Ask a question about tech topics...")
 
 if query:
+    display_query = redact_sensitive_text(query)
+    query_metadata = build_metadata(query, source="user_input")
+
     # Display the user's message immediately
     with st.chat_message("user"):
-        st.write(query)
+        st.write(display_query)
 
     # Store the user message for future re-renders
-    st.session_state.chat_messages.append({"role": "user", "content": query})
+    st.session_state.chat_messages.append({
+        "role": "user",
+        "content": display_query,
+        "metadata": query_metadata,
+    })
 
     # Run the RAG pipeline and display the response
     with st.chat_message("assistant"):
@@ -196,6 +204,7 @@ if query:
         "distances": result["distances"],
         "confidence": result["confidence"],
         "grounding": result["grounding"],
+        "metadata": result.get("metadata", {}),
     })
 
     # Note: conversation_history is updated inside run_rag()

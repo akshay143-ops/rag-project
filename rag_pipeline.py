@@ -28,12 +28,13 @@ from config import (
 )
 from embeddings import embed_text, embed_documents
 from vector_store import add_documents, query_similar
-from data_loader import get_documents, generate_ids
+from data_loader import get_documents, generate_ids, generate_metadata
 from conversation import ConversationHistory
 from security import validate_input, sanitize_input
 from monitoring import check_hallucination, calculate_confidence
 from filters import filter_by_threshold, has_relevant_results, get_fallback_response, handle_api_error
 from workflow import rewrite_query
+from compliance import build_metadata, redact_sensitive_text
 
 _client = genai.Client(api_key=GEMINI_API_KEY)
 
@@ -50,8 +51,9 @@ def initialize_vector_store():
     """
     documents = get_documents()
     ids = generate_ids(documents)
+    metadatas = generate_metadata(documents)
     embeddings = embed_documents(documents)
-    add_documents(documents, embeddings, ids)
+    add_documents(documents, embeddings, ids, metadatas)
     return len(documents)
 
 
@@ -65,14 +67,15 @@ def retrieve_context(query, n_results=TOP_K_RESULTS):
       3. "Closest" means most semantically similar — not just keyword matching
 
     Returns:
-        (documents, distances) — matched docs and their similarity distances.
+        (documents, distances, metadatas) — matched docs, distances, and tags.
         Lower distance = more similar to the query.
     """
     query_embedding = embed_text(query)
     results = query_similar(query_embedding, n_results)
     documents = results["documents"][0]
     distances = results["distances"][0]
-    return documents, distances
+    metadatas = results.get("metadatas", [[]])[0]
+    return documents, distances, metadatas
 
 
 def generate_answer(query, context_docs, conversation_history=None):
@@ -82,8 +85,11 @@ def generate_answer(query, context_docs, conversation_history=None):
     The prompt includes the retrieved documents so Gemini's answer is
     grounded in our knowledge base rather than just its training data.
     """
+    safe_context_docs = [redact_sensitive_text(doc) for doc in context_docs]
+    safe_query = redact_sensitive_text(query)
+
     context = "\n\n".join(
-        [f"Document {i+1}: {doc}" for i, doc in enumerate(context_docs)]
+        [f"Document {i+1}: {doc}" for i, doc in enumerate(safe_context_docs)]
     )
 
     # ── Week 11 TODO ──────────────────────────────────────────────────────────
@@ -110,7 +116,7 @@ def generate_answer(query, context_docs, conversation_history=None):
 
 Context Documents:
 {context}{history_section}
-Current Question: {query}
+Current Question: {safe_query}
 
 Instructions:
 - Answer based primarily on the provided context documents
@@ -167,10 +173,13 @@ def run_rag(query, conversation_history=None):
             "distances": [],
             "confidence": 0.0,
             "grounding": {},
+            "metadata": {"query": build_metadata(query, source="user_input")},
             "error": error_message,
         }
 
     query = sanitize_input(query)
+    query_metadata = build_metadata(query, source="user_input")
+    safe_query = redact_sensitive_text(query)
 
     # ── Week 15 TODO ──────────────────────────────────────────────────────────
     # Rewrite the query before retrieval to improve embedding quality.
@@ -190,10 +199,10 @@ def run_rag(query, conversation_history=None):
     if conversation_history and len(conversation_history) > 0:
         history_context = conversation_history.get_formatted_history()
 
-    retrieval_query = rewrite_query(query, history_context)
+    retrieval_query = rewrite_query(safe_query, history_context)
 
     # ── Week 10: Core Retrieval — already complete ───────────────────────────
-    documents, distances = retrieve_context(retrieval_query)
+    documents, distances, source_metadatas = retrieve_context(retrieval_query)
 
     # ── Week 14 TODO ──────────────────────────────────────────────────────────
     # Filter out documents that aren't similar enough to be useful.
@@ -210,6 +219,11 @@ def run_rag(query, conversation_history=None):
     #         "grounding": {"verdict": "N/A", "is_grounded": True, "warning": ""},
     #         "error": ""}
     # ─────────────────────────────────────────────────────────────────────────
+    filtered_metadatas = [
+        metadata
+        for metadata, distance in zip(source_metadatas, distances)
+        if distance <= SIMILARITY_THRESHOLD
+    ]
     documents, distances = filter_by_threshold(documents, distances, SIMILARITY_THRESHOLD)
     if not has_relevant_results(documents):
         return {
@@ -218,23 +232,35 @@ def run_rag(query, conversation_history=None):
             "distances": [],
             "confidence": 0.0,
             "grounding": {"verdict": "N/A", "is_grounded": True, "warning": ""},
+            "metadata": {
+                "query": query_metadata,
+                "sources": [],
+                "answer": build_metadata("", source="model_output"),
+            },
             "error": "",
         }
 
     # ── Week 10: Core Generation — already complete ──────────────────────────
     # Week 14: wrap this in try/except and call handle_api_error(e) on failure
     try:
-        answer = generate_answer(query, documents, conversation_history)
+        answer = generate_answer(safe_query, documents, conversation_history)
     except Exception as e:
-        error_message = handle_api_error(e)
+        error_message = redact_sensitive_text(handle_api_error(e))
         return {
             "answer": error_message,
             "sources": documents,
             "distances": distances,
             "confidence": 0.0,
             "grounding": {},
+            "metadata": {
+                "query": query_metadata,
+                "sources": filtered_metadatas,
+                "answer": build_metadata(error_message, source="model_output"),
+            },
             "error": error_message,
         }
+    answer_metadata = build_metadata(answer, source="model_output")
+    answer = redact_sensitive_text(answer)
 
     # ── Week 13 TODO ──────────────────────────────────────────────────────────
     # Monitor the response quality after generation.
@@ -264,7 +290,7 @@ def run_rag(query, conversation_history=None):
     #   conversation_history.add_message("assistant", answer)
     # ─────────────────────────────────────────────────────────────────────────
     if conversation_history is not None:
-        conversation_history.add_message("user", query)
+        conversation_history.add_message("user", safe_query)
         conversation_history.add_message("assistant", answer)
 
     return {
@@ -273,6 +299,11 @@ def run_rag(query, conversation_history=None):
         "distances": distances,
         "confidence": confidence,
         "grounding": grounding,
+        "metadata": {
+            "query": query_metadata,
+            "sources": filtered_metadatas,
+            "answer": answer_metadata,
+        },
         "error": "",
     }
 
