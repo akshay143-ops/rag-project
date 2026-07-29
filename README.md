@@ -133,6 +133,38 @@ This approach is intentionally simple. It uses regex-based detection, so it will
 
 ---
 
+## Testing and CI
+
+This project uses `pytest` for automated tests. The tests focus on deterministic, safety-critical helpers that do not call Gemini or depend on a live vector database.
+
+Current tests cover:
+
+- Sensitive data redaction for email addresses and phone numbers
+- Metadata tagging for restricted user input such as SSNs
+- Public text detection with no sensitive data
+- Prompt-injection blocking in `validate_input()`
+- Empty and overly long query rejection
+- Input sanitization behavior
+
+These tests matter because redaction, metadata tagging, and input validation are safety boundaries. If those helpers break, the app could leak private data or process unsafe prompts.
+
+Intentionally not tested in unit tests:
+
+- Live Gemini API calls
+- Streamlit UI rendering
+- SentenceTransformer embedding quality
+- ChromaDB retrieval ranking
+
+Run tests locally with:
+
+```bash
+pytest
+```
+
+GitHub Actions runs the same test suite on every push and pull request using `.github/workflows/tests.yml`.
+
+---
+
 ## Weekly Progress
 
 Update this checklist as you complete each week's assignment.
