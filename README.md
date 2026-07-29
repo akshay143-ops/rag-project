@@ -8,6 +8,10 @@ You can ask this app questions about Python, machine learning, databases, APIs, 
 
 ## System Architecture
 
+![RAG App Architecture Diagram](docs/rag-app-architecture-diagram.svg)
+
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full architecture explanation and editable Excalidraw source.
+
 ```
 User Query
     │
